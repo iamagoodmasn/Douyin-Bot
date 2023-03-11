@@ -4,6 +4,7 @@ import random
 import time
 from PIL import Image
 import argparse
+import json
 
 if sys.version_info.major != 3:
     print('Please run under Python3')
@@ -23,8 +24,8 @@ VERSION = "0.0.1"
 
 # 我申请的 Key，随便用，嘻嘻嘻
 # 申请地址 http://ai.qq.com
-AppID = '1106858595'
-AppKey = 'bNUNgOpY6AeeJjFu'
+AppID = "AKIDvhEXbR4TdZrvlMjrkU0HJ8lU0IL9i3A3"
+AppKey = "hCaqwrY0EF1bw3wc3FCvPzNZZN1RgleM"
 
 DEBUG_SWITCH = True
 FACE_PATH = 'face/'
@@ -34,7 +35,7 @@ adb.test_device()
 config = config.open_accordant_config()
 
 # 审美标准
-BEAUTY_THRESHOLD = 80
+BEAUTY_THRESHOLD = 85
 
 # 最小年龄
 GIRL_MIN_AGE = 14
@@ -164,46 +165,45 @@ def main():
         time.sleep(1)
         screenshot.pull_screenshot()
 
-        resize_image('autojump.png', 'optimized.png', 1024*1024)
+        resize_image('autojump.png', 'optimized.png', 900*900)#1024*1024
 
         with open('optimized.png', 'rb') as bin_data:
             image_data = bin_data.read()
 
         ai_obj = apiutil.AiPlat(AppID, AppKey)
-        rsp = ai_obj.face_detectface(image_data, 0)
+        rsp = ai_obj.face_detectface(image_data)
 
         major_total = 0
         minor_total = 0
-
         if rsp['ret'] == 0:
             beauty = 0
-            for face in rsp['data']['face_list']:
+            face = rsp["FaceInfos"][0]["FaceAttributesInfo"]
+            face_data=rsp["FaceInfos"][0]
+            msg_log = '[INFO] gender: {gender} age: {age} expression: {expression} beauty: {beauty}'.format(
+                    gender=face['Gender'],
+                    age=face['Age'],
+                    expression=face['Expression'],
+                    beauty=face['Beauty'],
+            )
+            print(msg_log)
+            face_area = (face_data['X'], face_data['Y'], face_data['X']+face_data['Width'], face_data['Y']+face_data['Height'])
+            img = Image.open("optimized.png")
+            cropped_img = img.crop(face_area).convert('RGB')
+             # 性别判断
+            if face['Beauty'] > beauty and face['Gender'] < 50:
+                 beauty = face['Beauty']
 
-                msg_log = '[INFO] gender: {gender} age: {age} expression: {expression} beauty: {beauty}'.format(
-                    gender=face['gender'],
-                    age=face['age'],
-                    expression=face['expression'],
-                    beauty=face['beauty'],
-                )
-                print(msg_log)
-                face_area = (face['x'], face['y'], face['x']+face['width'], face['y']+face['height'])
-                img = Image.open("optimized.png")
-                cropped_img = img.crop(face_area).convert('RGB')
-                cropped_img.save(FACE_PATH + face['face_id'] + '.png')
-                # 性别判断
-                if face['beauty'] > beauty and face['gender'] < 50:
-                    beauty = face['beauty']
-
-                if face['age'] > GIRL_MIN_AGE:
-                    major_total += 1
-                else:
-                    minor_total += 1
+            if face['Age'] > GIRL_MIN_AGE:
+                major_total += 1
+            else:
+                minor_total += 1
 
             # 是个美人儿~关注点赞走一波
             if beauty > BEAUTY_THRESHOLD and major_total > minor_total:
                 print('发现漂亮妹子！！！')
                 thumbs_up()
                 follow_user()
+                cropped_img.save(FACE_PATH + rsp["RequestId"] + '.png')
 
                 if cmd_args['reply']:
                     auto_reply()
